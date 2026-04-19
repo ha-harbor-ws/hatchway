@@ -8,7 +8,7 @@
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000 --log-level debug
 ```
 
 ## Docker (Linux-сервер)
@@ -39,6 +39,7 @@ uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 | `SESSION_SECRET` | Секрет подписи cookie-сессий (обязательно)    |
 | `HATCHWAY_PORT`  | Порт на хосте (по умолчанию `8000`)          |
 | `MAX_UPLOAD_MB`  | Максимальный размер одного файла (МБ)        |
+| `UVICORN_LOG_LEVEL` | Уровень логов Uvicorn (`debug`, `info`, …; в compose по умолчанию `debug`) |
 
 Перед продакшеном смените `SESSION_SECRET` и при необходимости поставьте reverse proxy (nginx, Caddy) с HTTPS.
 
