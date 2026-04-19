@@ -215,6 +215,39 @@ table.rating .tab-num {
   font-weight: 500;
 }
 
+.rating-thumbs-cell {
+  vertical-align: middle;
+  max-width: min(360px, 45vw);
+}
+
+.rating-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.rating-thumb-link {
+  display: inline-block;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  line-height: 0;
+  flex-shrink: 0;
+}
+
+.rating-thumb-link:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(61, 156, 245, 0.35);
+}
+
+.rating-thumb {
+  width: 52px;
+  height: 52px;
+  object-fit: cover;
+  display: block;
+}
+
 .pair-grid {
   display: grid;
   grid-template-columns: 1fr;

@@ -16,7 +16,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.config import ALLOWED_EXTENSIONS, MAX_UPLOAD_MB, SECRET_KEY, UPLOADS_DIR
 from app.database import get_db, init_db
 from app.exif_utils import get_gps_coords
-from app.models import User, WellSubmission
+from app.models import Hatch, User
 
 
 def _suppress_uvicorn_invalid_http_noise() -> None:
@@ -239,28 +239,46 @@ def logout(request: Request) -> RedirectResponse:
     return RedirectResponse("/login", status_code=302)
 
 
+def _media_url(rel_path: str) -> str:
+    return "/media/" + rel_path.replace("\\", "/")
+
+
 def _rating_rows(db: Session) -> list[dict]:
+    """Сортировка по числу люков; миниатюры — последние загрузки (ограничение по числу люков)."""
+    max_hatches_for_thumbs = 12
     q = (
         select(
+            User.id,
             User.tab_number,
             User.first_name,
             User.surname,
-            func.count(WellSubmission.id).label("wells"),
+            func.count(Hatch.id).label("hatch_count"),
         )
-        .outerjoin(WellSubmission, WellSubmission.user_id == User.id)
+        .outerjoin(Hatch, Hatch.user_id == User.id)
         .group_by(User.id, User.tab_number, User.first_name, User.surname)
-        .order_by(func.count(WellSubmission.id).desc(), User.surname, User.first_name)
+        .order_by(func.count(Hatch.id).desc(), User.surname, User.first_name)
     )
     rows = db.execute(q).all()
-    return [
-        {
-            "tab_number": r[0],
-            "first_name": r[1],
-            "surname": r[2],
-            "hatch_photos": int(r[3]),
-        }
-        for r in rows
-    ]
+    out: list[dict] = []
+    for r in rows:
+        uid = int(r[0])
+        hatches = db.scalars(
+            select(Hatch).where(Hatch.user_id == uid).order_by(Hatch.created_at.desc()).limit(max_hatches_for_thumbs)
+        ).all()
+        photos: list[dict[str, str]] = []
+        for h in hatches:
+            photos.append({"url": _media_url(h.hatch_rel_path), "title": "Люк"})
+            photos.append({"url": _media_url(h.panorama_rel_path), "title": "Панорама"})
+        out.append(
+            {
+                "tab_number": r[1],
+                "first_name": r[2],
+                "surname": r[3],
+                "hatch_count": int(r[4]),
+                "photos": photos,
+            }
+        )
+    return out
 
 
 @app.post("/api/well", response_class=HTMLResponse)
@@ -305,7 +323,7 @@ async def upload_well(
     rel_h = f"{user.id}/{hatch_name}"
     rel_p = f"{user.id}/{pan_name}"
 
-    sub = WellSubmission(
+    hatch_row = Hatch(
         user_id=user.id,
         hatch_rel_path=rel_h,
         panorama_rel_path=rel_p,
@@ -317,7 +335,7 @@ async def upload_well(
         user_map_lon=u_lon,
         user_map_accuracy_m=u_acc,
     )
-    db.add(sub)
+    db.add(hatch_row)
     db.commit()
 
     rows = _rating_rows(db)

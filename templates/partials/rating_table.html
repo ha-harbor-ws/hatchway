@@ -1,8 +1,8 @@
 <section class="rating-block" id="rating-block">
   <h2>Рейтинг</h2>
-  <p class="muted small">Количество загруженных <strong>фотографий люков</strong> (один колодец = люк + панорама).</p>
+  <p class="muted small">Сортировка по числу загруженных <strong>люков</strong> (один люк = два фото: люк + панорама). Нажмите на миниатюру, чтобы открыть снимок.</p>
   {% if ok %}
-  <p class="success" role="status">Колодец сохранён: пара фото принята.</p>
+  <p class="success" role="status">Люк сохранён: пара фото принята.</p>
   {% endif %}
   <div class="table-scroll">
     <table class="rating">
@@ -12,7 +12,8 @@
           <th>Табельный</th>
           <th>Имя</th>
           <th>Фамилия</th>
-          <th>Фото люков</th>
+          <th>Люков</th>
+          <th>Снимки</th>
         </tr>
       </thead>
       <tbody>
@@ -22,11 +23,24 @@
           <td class="num tab-num">{{ row.tab_number }}</td>
           <td>{{ row.first_name }}</td>
           <td>{{ row.surname }}</td>
-          <td class="num">{{ row.hatch_photos }}</td>
+          <td class="num">{{ row.hatch_count }}</td>
+          <td class="rating-thumbs-cell">
+            {% if row.photos %}
+            <div class="rating-thumbs" role="group" aria-label="Миниатюры загруженных фото">
+              {% for p in row.photos %}
+              <a href="{{ p.url }}" target="_blank" rel="noopener noreferrer" class="rating-thumb-link" title="{{ p.title }} — открыть в полном размере">
+                <img src="{{ p.url }}" alt="{{ p.title }}" class="rating-thumb" width="52" height="52" loading="lazy">
+              </a>
+              {% endfor %}
+            </div>
+            {% else %}
+            <span class="muted">—</span>
+            {% endif %}
+          </td>
         </tr>
         {% else %}
         <tr>
-          <td colspan="5" class="muted">Пока нет загрузок</td>
+          <td colspan="6" class="muted">Пока нет загрузок</td>
         </tr>
         {% endfor %}
       </tbody>

@@ -27,25 +27,35 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
-def _migrate_sqlite_well_columns() -> None:
-    """Добавить столбцы к существующей SQLite-таблице без Alembic."""
+def _rename_well_submissions_to_hatches_sqlite() -> None:
+    """Старая таблица well_submissions → hatches."""
     if not str(DATABASE_URL).startswith("sqlite"):
         return
     insp = inspect(engine)
-    if not insp.has_table("well_submissions"):
+    if insp.has_table("well_submissions") and not insp.has_table("hatches"):
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE well_submissions RENAME TO hatches"))
+
+
+def _migrate_sqlite_hatch_columns() -> None:
+    """Добавить недостающие столбцы к hatches (после переименования или старых БД)."""
+    if not str(DATABASE_URL).startswith("sqlite"):
         return
-    existing = {c["name"] for c in insp.get_columns("well_submissions")}
+    insp = inspect(engine)
+    if not insp.has_table("hatches"):
+        return
+    existing = {c["name"] for c in insp.get_columns("hatches")}
     alters: list[str] = []
     if "panorama_lat" not in existing:
-        alters.append("ALTER TABLE well_submissions ADD COLUMN panorama_lat REAL")
+        alters.append("ALTER TABLE hatches ADD COLUMN panorama_lat REAL")
     if "panorama_lon" not in existing:
-        alters.append("ALTER TABLE well_submissions ADD COLUMN panorama_lon REAL")
+        alters.append("ALTER TABLE hatches ADD COLUMN panorama_lon REAL")
     if "user_map_lat" not in existing:
-        alters.append("ALTER TABLE well_submissions ADD COLUMN user_map_lat REAL")
+        alters.append("ALTER TABLE hatches ADD COLUMN user_map_lat REAL")
     if "user_map_lon" not in existing:
-        alters.append("ALTER TABLE well_submissions ADD COLUMN user_map_lon REAL")
+        alters.append("ALTER TABLE hatches ADD COLUMN user_map_lon REAL")
     if "user_map_accuracy_m" not in existing:
-        alters.append("ALTER TABLE well_submissions ADD COLUMN user_map_accuracy_m REAL")
+        alters.append("ALTER TABLE hatches ADD COLUMN user_map_accuracy_m REAL")
     if not alters:
         return
     with engine.begin() as conn:
@@ -56,5 +66,6 @@ def _migrate_sqlite_well_columns() -> None:
 def init_db() -> None:
     from app import models  # noqa: F401
 
+    _rename_well_submissions_to_hatches_sqlite()
     Base.metadata.create_all(bind=engine)
-    _migrate_sqlite_well_columns()
+    _migrate_sqlite_hatch_columns()
