@@ -290,6 +290,10 @@ table.rating .tab-num {
   min-height: 280px;
 }
 
+.submit-row {
+  margin: 0.75rem 0 1rem;
+}
+
 .map-card {
   margin: 1.25rem 0 1rem;
 }

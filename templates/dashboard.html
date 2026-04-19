@@ -24,6 +24,12 @@
       </div>
     </div>
 
+    <p class="error" id="client-error" hidden role="alert"></p>
+    <p class="small muted" id="submit-hint">Кнопка станет активной, когда в <strong>обоих</strong> выбранных файлах будет распознан GPS в EXIF (под полями появятся зелёные подсказки и точки на карте).</p>
+    <div class="submit-row">
+      <button type="submit" class="btn primary" id="submit-btn" disabled>Отправить на сервер</button>
+    </div>
+
     <div class="map-card">
       <p class="geo-status muted small" id="geo-status" aria-live="polite"></p>
       <div id="map-well" class="map map-large" role="application" aria-label="Карта точек съёмки"></div>
@@ -31,9 +37,6 @@
     </div>
 
     {% include "partials/rating_table.html" %}
-
-    <p class="error" id="client-error" hidden role="alert"></p>
-    <button type="submit" class="btn primary" id="submit-btn" disabled>Отправить на сервер</button>
   </form>
 </section>
 {% endblock %}

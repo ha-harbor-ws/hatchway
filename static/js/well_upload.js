@@ -9,6 +9,7 @@
   const submitBtn = document.getElementById("submit-btn");
   const clientError = document.getElementById("client-error");
   const geoStatus = document.getElementById("geo-status");
+  const submitHint = document.getElementById("submit-hint");
 
   const DEFAULT_CENTER = [55.75, 37.62];
   const DEFAULT_ZOOM = 11;
@@ -139,12 +140,39 @@
     setTimeout(requestBrowserGeo, 400);
   });
 
+  function _numCoord(v) {
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string" && v.trim() !== "") {
+      const n = parseFloat(v.replace(",", "."));
+      return Number.isFinite(n) ? n : NaN;
+    }
+    return NaN;
+  }
+
   async function readGps(file) {
-    if (!file || !window.exifr) return null;
+    const ex = typeof globalThis.exifr !== "undefined" ? globalThis.exifr : null;
+    if (!file || !ex) {
+      return null;
+    }
     try {
-      const gps = await exifr.gps(file);
-      if (gps && typeof gps.latitude === "number" && typeof gps.longitude === "number") {
-        return { lat: gps.latitude, lon: gps.longitude };
+      let lat = NaN;
+      let lon = NaN;
+      if (typeof ex.gps === "function") {
+        const gps = await ex.gps(file);
+        if (gps) {
+          lat = _numCoord(gps.latitude);
+          lon = _numCoord(gps.longitude);
+        }
+      }
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+        const parsed = await ex.parse(file, { gps: true });
+        if (parsed) {
+          lat = _numCoord(parsed.latitude ?? parsed.GPSLatitude);
+          lon = _numCoord(parsed.longitude ?? parsed.GPSLongitude);
+        }
+      }
+      if (Number.isFinite(lat) && Number.isFinite(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+        return { lat: lat, lon: lon };
       }
     } catch (e) {
       console.warn(e);
@@ -161,6 +189,16 @@
   function updateSubmit() {
     submitBtn.disabled = !(hatchOk && panOk);
     clientError.hidden = true;
+    if (submitHint) {
+      if (hatchOk && panOk) {
+        submitHint.textContent = "Оба снимка с GPS — можно отправить на сервер.";
+        submitHint.className = "small hint ok";
+      } else {
+        submitHint.textContent =
+          "Кнопка включится, когда в обоих файлах будет распознан GPS в EXIF (зелёные подсказки и точки на карте). Снимки с телефона обычно подходят, если при съёмке была включена геолокация.";
+        submitHint.className = "small muted";
+      }
+    }
   }
 
   async function onHatchChange() {
@@ -238,6 +276,14 @@
 
   hatchInput.addEventListener("change", onHatchChange);
   panInput.addEventListener("change", onPanChange);
+
+  if (typeof globalThis.exifr === "undefined" && submitHint) {
+    submitHint.textContent =
+      "Не загрузилась библиотека EXIF (cdn.jsdelivr.net). Проверьте сеть, VPN или блокировщик — без неё GPS в файлах не проверить и кнопка не активируется.";
+    submitHint.className = "small hint bad";
+  } else {
+    updateSubmit();
+  }
 
   form.addEventListener("submit", async function (e) {
     e.preventDefault();
