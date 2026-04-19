@@ -4,8 +4,6 @@
 <h1>Загрузка колодца</h1>
 <p class="lead">За один раз — <strong>два</strong> файла: фото люка и панорама места с ориентиром (здание рядом). В обоих снимках должны быть геоданные GPS в EXIF. На одной карте показываются точки из EXIF и <strong>ваше местоположение</strong> по браузеру (запрос при открытии страницы).</p>
 
-{% include "partials/rating_table.html" %}
-
 <section class="card upload-section">
   <h2>Новая пара фото</h2>
   <form id="well-form" class="well-form">
@@ -31,6 +29,8 @@
       <div id="map-well" class="map map-large" role="application" aria-label="Карта точек съёмки"></div>
       <p class="map-legend small muted">Синяя точка — координаты из EXIF фото люка; зелёная — из EXIF панорамы. Жёлтая — ваше приблизительное местоположение по данным браузера (запрос появится при загрузке страницы).</p>
     </div>
+
+    {% include "partials/rating_table.html" %}
 
     <p class="error" id="client-error" hidden role="alert"></p>
     <button type="submit" class="btn primary" id="submit-btn" disabled>Отправить на сервер</button>

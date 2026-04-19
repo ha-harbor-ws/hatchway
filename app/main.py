@@ -241,13 +241,26 @@ def logout(request: Request) -> RedirectResponse:
 
 def _rating_rows(db: Session) -> list[dict]:
     q = (
-        select(User.first_name, User.surname, func.count(WellSubmission.id).label("wells"))
+        select(
+            User.tab_number,
+            User.first_name,
+            User.surname,
+            func.count(WellSubmission.id).label("wells"),
+        )
         .outerjoin(WellSubmission, WellSubmission.user_id == User.id)
-        .group_by(User.id, User.first_name, User.surname)
+        .group_by(User.id, User.tab_number, User.first_name, User.surname)
         .order_by(func.count(WellSubmission.id).desc(), User.surname, User.first_name)
     )
     rows = db.execute(q).all()
-    return [{"first_name": r[0], "surname": r[1], "hatch_photos": int(r[2])} for r in rows]
+    return [
+        {
+            "tab_number": r[0],
+            "first_name": r[1],
+            "surname": r[2],
+            "hatch_photos": int(r[3]),
+        }
+        for r in rows
+    ]
 
 
 @app.post("/api/well", response_class=HTMLResponse)

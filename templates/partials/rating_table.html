@@ -9,6 +9,7 @@
       <thead>
         <tr>
           <th>#</th>
+          <th>Табельный</th>
           <th>Имя</th>
           <th>Фамилия</th>
           <th>Фото люков</th>
@@ -18,13 +19,14 @@
         {% for row in rating %}
         <tr>
           <td>{{ loop.index }}</td>
+          <td class="num tab-num">{{ row.tab_number }}</td>
           <td>{{ row.first_name }}</td>
           <td>{{ row.surname }}</td>
           <td class="num">{{ row.hatch_photos }}</td>
         </tr>
         {% else %}
         <tr>
-          <td colspan="4" class="muted">Пока нет загрузок</td>
+          <td colspan="5" class="muted">Пока нет загрузок</td>
         </tr>
         {% endfor %}
       </tbody>

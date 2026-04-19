@@ -173,6 +173,7 @@ table.rating th {
 
 table.rating tr:last-child td { border-bottom: none; }
 table.rating .num { font-variant-numeric: tabular-nums; font-weight: 600; }
+table.rating .tab-num { font-weight: 500; }
 
 .pair-grid {
   display: grid;
