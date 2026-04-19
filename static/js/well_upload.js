@@ -16,8 +16,14 @@
 
   let hatchOk = false;
   let panOk = false;
+  let hatchLoadGen = 0;
+  let panLoadGen = 0;
   /** Последняя геопозиция с карты (браузер) — уходит на сервер при отправке формы */
   let lastUserMap = null;
+
+  function _fileKey(file) {
+    return file ? file.name + "|" + file.size + "|" + file.lastModified : "";
+  }
 
   const map = L.map("map-well", { zoomControl: true }).setView(DEFAULT_CENTER, DEFAULT_ZOOM);
 
@@ -57,20 +63,24 @@
   }
 
   function fitMapToAll() {
-    const layers = [];
-    if (hatchMarker) layers.push(hatchMarker);
-    if (panMarker) layers.push(panMarker);
-    if (userMarker) layers.push(userMarker);
-    if (userAccuracyCircle) layers.push(userAccuracyCircle);
+    try {
+      const layers = [];
+      if (hatchMarker) layers.push(hatchMarker);
+      if (panMarker) layers.push(panMarker);
+      if (userMarker) layers.push(userMarker);
+      if (userAccuracyCircle) layers.push(userAccuracyCircle);
 
-    if (layers.length === 0) {
-      map.setView(DEFAULT_CENTER, DEFAULT_ZOOM);
-      return;
-    }
+      if (layers.length === 0) {
+        map.setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+        return;
+      }
 
-    const b = L.featureGroup(layers).getBounds();
-    if (b.isValid()) {
-      map.fitBounds(b, { padding: [56, 56], maxZoom: 17 });
+      const b = L.featureGroup(layers).getBounds();
+      if (b.isValid()) {
+        map.fitBounds(b, { padding: [56, 56], maxZoom: 17 });
+      }
+    } catch (e) {
+      console.warn("fitMapToAll", e);
     }
   }
 
@@ -187,7 +197,9 @@
   }
 
   function updateSubmit() {
-    submitBtn.disabled = !(hatchOk && panOk);
+    if (submitBtn) {
+      submitBtn.disabled = !(hatchOk && panOk);
+    }
     clientError.hidden = true;
     if (submitHint) {
       if (hatchOk && panOk) {
@@ -202,8 +214,10 @@
   }
 
   async function onHatchChange() {
+    const gen = ++hatchLoadGen;
     hatchOk = false;
     removeHatchMarker();
+    updateSubmit();
     const f = hatchInput.files && hatchInput.files[0];
     if (!f) {
       hatchHint.textContent = "Выберите файл — проверим GPS в EXIF.";
@@ -212,7 +226,10 @@
       updateSubmit();
       return;
     }
+    const key = _fileKey(f);
     const pos = await readGps(f);
+    if (gen !== hatchLoadGen) return;
+    if (_fileKey(hatchInput.files && hatchInput.files[0]) !== key) return;
     if (!pos) {
       setHint(
         hatchHint,
@@ -226,23 +243,30 @@
     }
     hatchOk = true;
     setHint(hatchHint, true, "GPS в EXIF найден — точка на карте (синяя).", "");
-    hatchMarker = L.circleMarker([pos.lat, pos.lon], {
-      radius: 10,
-      color: "#2a7abf",
-      weight: 2,
-      fillColor: "#3d9cf5",
-      fillOpacity: 0.95,
-    })
-      .addTo(map)
-      .bindPopup("Люк: координаты из EXIF этого фото");
-    fitMapToAll();
-    invalidateMap();
-    updateSubmit();
+    try {
+      hatchMarker = L.circleMarker([pos.lat, pos.lon], {
+        radius: 10,
+        color: "#2a7abf",
+        weight: 2,
+        fillColor: "#3d9cf5",
+        fillOpacity: 0.95,
+      })
+        .addTo(map)
+        .bindPopup("Люк: координаты из EXIF этого фото");
+      fitMapToAll();
+      invalidateMap();
+    } catch (e) {
+      console.warn("onHatchChange map", e);
+    } finally {
+      updateSubmit();
+    }
   }
 
   async function onPanChange() {
+    const gen = ++panLoadGen;
     panOk = false;
     removePanMarker();
+    updateSubmit();
     const f = panInput.files && panInput.files[0];
     if (!f) {
       panHint.textContent = "Выберите файл — проверим GPS в EXIF.";
@@ -251,7 +275,10 @@
       updateSubmit();
       return;
     }
+    const key = _fileKey(f);
     const pos = await readGps(f);
+    if (gen !== panLoadGen) return;
+    if (_fileKey(panInput.files && panInput.files[0]) !== key) return;
     if (!pos) {
       setHint(panHint, false, "", "В этом файле не найдены GPS-координаты в EXIF.");
       fitMapToAll();
@@ -260,18 +287,23 @@
     }
     panOk = true;
     setHint(panHint, true, "GPS в EXIF найден — точка на карте (зелёная).", "");
-    panMarker = L.circleMarker([pos.lat, pos.lon], {
-      radius: 10,
-      color: "#2d8a4e",
-      weight: 2,
-      fillColor: "#4ecf7a",
-      fillOpacity: 0.95,
-    })
-      .addTo(map)
-      .bindPopup("Панорама: координаты из EXIF этого фото");
-    fitMapToAll();
-    invalidateMap();
-    updateSubmit();
+    try {
+      panMarker = L.circleMarker([pos.lat, pos.lon], {
+        radius: 10,
+        color: "#2d8a4e",
+        weight: 2,
+        fillColor: "#4ecf7a",
+        fillOpacity: 0.95,
+      })
+        .addTo(map)
+        .bindPopup("Панорама: координаты из EXIF этого фото");
+      fitMapToAll();
+      invalidateMap();
+    } catch (e) {
+      console.warn("onPanChange map", e);
+    } finally {
+      updateSubmit();
+    }
   }
 
   hatchInput.addEventListener("change", onHatchChange);
@@ -303,7 +335,7 @@
         fd.append("user_map_accuracy_m", String(lastUserMap.acc));
       }
     }
-    submitBtn.disabled = true;
+    if (submitBtn) submitBtn.disabled = true;
     try {
       const res = await fetch("/api/well", {
         method: "POST",
@@ -354,7 +386,7 @@
       clientError.textContent = "Ошибка сети. Попробуйте ещё раз.";
       clientError.hidden = false;
     } finally {
-      submitBtn.disabled = !(hatchOk && panOk);
+      if (submitBtn) submitBtn.disabled = !(hatchOk && panOk);
     }
   });
 })();
