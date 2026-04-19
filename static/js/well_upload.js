@@ -159,33 +159,76 @@
     return NaN;
   }
 
+  function _coordsFromObject(obj) {
+    if (!obj || typeof obj !== "object") return null;
+    const lat = _numCoord(
+      obj.latitude ?? obj.Latitude ?? obj.GPSLatitude ?? obj.gpsLatitude
+    );
+    const lon = _numCoord(
+      obj.longitude ?? obj.Longitude ?? obj.GPSLongitude ?? obj.gpsLongitude
+    );
+    if (Number.isFinite(lat) && Number.isFinite(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+      return { lat: lat, lon: lon };
+    }
+    if (obj.GPS && typeof obj.GPS === "object") {
+      return _coordsFromObject(obj.GPS);
+    }
+    return null;
+  }
+
+  /**
+   * Чтение GPS из EXIF/XMP: ArrayBuffer + несколько стратегий и повторов.
+   * Иначе на части устройств первый проход по File даёт пусто, хотя координаты в файле есть.
+   */
   async function readGps(file) {
     const ex = typeof globalThis.exifr !== "undefined" ? globalThis.exifr : null;
-    if (!file || !ex) {
+    if (!file || !ex || !file.size) {
       return null;
     }
+    await new Promise(function (r) {
+      queueMicrotask(r);
+    });
+    let buffer;
     try {
-      let lat = NaN;
-      let lon = NaN;
-      if (typeof ex.gps === "function") {
-        const gps = await ex.gps(file);
-        if (gps) {
-          lat = _numCoord(gps.latitude);
-          lon = _numCoord(gps.longitude);
-        }
-      }
-      if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-        const parsed = await ex.parse(file, { gps: true });
-        if (parsed) {
-          lat = _numCoord(parsed.latitude ?? parsed.GPSLatitude);
-          lon = _numCoord(parsed.longitude ?? parsed.GPSLongitude);
-        }
-      }
-      if (Number.isFinite(lat) && Number.isFinite(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
-        return { lat: lat, lon: lon };
-      }
+      buffer = await file.arrayBuffer();
     } catch (e) {
-      console.warn(e);
+      console.warn("readGps arrayBuffer", e);
+      return null;
+    }
+    const tryParse = async function (opts) {
+      try {
+        return await ex.parse(buffer, opts);
+      } catch (e) {
+        console.warn("readGps parse", opts, e);
+        return null;
+      }
+    };
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) {
+        await new Promise(function (r) {
+          setTimeout(r, 60 * attempt);
+        });
+      }
+      try {
+        if (typeof ex.gps === "function") {
+          const g = await ex.gps(buffer);
+          const c = _coordsFromObject(g);
+          if (c) return c;
+        }
+      } catch (e) {
+        console.warn("readGps gps()", e);
+      }
+      const strategies = [
+        { gps: true, tiff: true, xmp: true, reviveValues: true, translateKeys: true },
+        { gps: true, tiff: true, ifd0: true, exif: true, reviveValues: true },
+        { gps: true, mergeOutput: true, reviveValues: true },
+        { tiff: true, xmp: true, reviveValues: true },
+      ];
+      for (let s = 0; s < strategies.length; s++) {
+        const parsed = await tryParse(strategies[s]);
+        const c = _coordsFromObject(parsed);
+        if (c) return c;
+      }
     }
     return null;
   }
@@ -306,8 +349,13 @@
     }
   }
 
-  hatchInput.addEventListener("change", onHatchChange);
-  panInput.addEventListener("change", onPanChange);
+  function bindFileInput(el, handler) {
+    el.addEventListener("change", handler);
+    el.addEventListener("input", handler);
+  }
+
+  bindFileInput(hatchInput, onHatchChange);
+  bindFileInput(panInput, onPanChange);
 
   if (typeof globalThis.exifr === "undefined" && submitHint) {
     submitHint.textContent =
