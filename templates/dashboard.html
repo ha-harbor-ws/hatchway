@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Кабинет — Hatchway{% endblock %}
+{% block content %}
+<h1>Загрузка колодца</h1>
+<p class="lead">За один раз — <strong>два</strong> файла: фото люка и панорама места с ориентиром (здание рядом). В обоих снимках должны быть геоданные GPS в EXIF.</p>
+
+{% include "partials/rating_table.html" %}
+
+<section class="card upload-section">
+  <h2>Новая пара фото</h2>
+  <form id="well-form" class="well-form">
+    <div class="pair-grid">
+      <div>
+        <label class="file-label">
+          Фото люка колодца
+          <input type="file" id="hatch-input" name="hatch" accept="image/jpeg,image/png,image/webp" required>
+        </label>
+        <p class="hint" id="hatch-gps-hint">Выберите файл — проверим GPS в браузере.</p>
+        <div id="map-hatch" class="map"></div>
+      </div>
+      <div>
+        <label class="file-label">
+          Панорама расположения (с зданием рядом)
+          <input type="file" id="panorama-input" name="panorama" accept="image/jpeg,image/png,image/webp" required>
+        </label>
+        <p class="hint" id="pan-gps-hint">Выберите файл — проверим GPS в браузере.</p>
+        <div id="map-panorama" class="map"></div>
+      </div>
+    </div>
+    <p class="error" id="client-error" hidden role="alert"></p>
+    <button type="submit" class="btn primary" id="submit-btn" disabled>Отправить на сервер</button>
+  </form>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/full.umd.js"></script>
+<script src="/static/js/well_upload.js"></script>
+{% endblock %}

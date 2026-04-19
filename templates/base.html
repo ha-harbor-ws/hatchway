@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Hatchway{% endblock %}</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="/static/css/style.css">
+  {% block head_extra %}{% endblock %}
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="logo" href="/">Hatchway</a>
+      {% if show_user %}
+      <span class="user-pill">{{ user.first_name }} {{ user.surname }}</span>
+      <form class="inline" method="post" action="/logout"><button type="submit" class="btn ghost">Выйти</button></form>
+      {% endif %}
+    </div>
+  </header>
+  <main class="wrap">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="site-footer wrap">
+    <p>Геоданные в EXIF проверяются в браузере и на сервере.</p>
+  </footer>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

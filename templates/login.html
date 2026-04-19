@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Вход — Hatchway{% endblock %}
+{% block content %}
+<h1>Вход</h1>
+<p class="lead">Табельный номер (только цифры) и фамилия, как в списке сотрудников.</p>
+{% if error %}
+<p class="error" role="alert">{{ error }}</p>
+{% endif %}
+<form class="card form" method="post" action="/login" autocomplete="on">
+  <label>
+    Табельный номер
+    <input name="tab_number" inputmode="numeric" pattern="[0-9]+" required>
+  </label>
+  <label>
+    Фамилия
+    <input name="surname" type="text" autocomplete="family-name" required>
+  </label>
+  <button type="submit" class="btn primary">Войти</button>
+</form>
+<p class="muted">Нет учётной записи? <a href="/register">Регистрация</a></p>
+{% endblock %}

@@ -1,0 +1,20 @@
+# Запуск на Linux: скопируйте проект, создайте .env из .env.example, затем:
+#   docker compose up -d --build
+services:
+  web:
+    build: .
+    image: hatchway:latest
+    restart: unless-stopped
+    ports:
+      - "${HATCHWAY_PORT:-8000}:8000"
+    environment:
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in .env file}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-25}
+    volumes:
+      # SQLite и загрузки сохраняются между перезапусками
+      - hatchway_data:/app/data
+      - hatchway_uploads:/app/uploads
+
+volumes:
+  hatchway_data:
+  hatchway_uploads:

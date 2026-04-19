@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Регистрация — Hatchway{% endblock %}
+{% block content %}
+<h1>Регистрация</h1>
+<p class="lead">Укажите табельный номер, имя и фамилию. После регистрации можно входить по номеру и фамилии.</p>
+{% if error %}
+<p class="error" role="alert">{{ error }}</p>
+{% endif %}
+<form class="card form" method="post" action="/register" autocomplete="on">
+  <label>
+    Табельный номер
+    <input name="tab_number" inputmode="numeric" pattern="[0-9]+" required>
+  </label>
+  <label>
+    Имя
+    <input name="first_name" type="text" autocomplete="given-name" required>
+  </label>
+  <label>
+    Фамилия
+    <input name="surname" type="text" autocomplete="family-name" required>
+  </label>
+  <button type="submit" class="btn primary">Создать и войти</button>
+</form>
+<p class="muted">Уже есть аккаунт? <a href="/login">Вход</a></p>
+{% endblock %}
