@@ -41,3 +41,15 @@ uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 | `MAX_UPLOAD_MB`  | Максимальный размер одного файла (МБ)        |
 
 Перед продакшеном смените `SESSION_SECRET` и при необходимости поставьте reverse proxy (nginx, Caddy) с HTTPS.
+
+### Ошибка 503 у прокси
+
+Чаще всего **бэкенд не запущен или падает в цикле перезапусков**. Проверьте логи:
+
+```bash
+docker compose logs -f web
+```
+
+Типичная причина на Linux — **нет прав на запись** в тома `/app/data` и `/app/uploads` (SQLite и файлы). В образе это обходится через `docker-entrypoint.sh` (chown под root перед запуском uvicorn от пользователя `hatchway`). После обновления образа выполните `docker compose up -d --build`.
+
+Проверка из контейнера: ответ `200` у `GET /health` (например `curl -s http://127.0.0.1:8000/health` с хоста на проброшенный порт).

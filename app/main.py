@@ -20,6 +20,13 @@ from app.models import User, WellSubmission
 app = FastAPI(title="Hatchway")
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, session_cookie="hatchway_session")
 
+
+@app.get("/health", include_in_schema=False)
+def health() -> dict[str, str]:
+    """Проверка живости за прокси / Docker healthcheck (без БД)."""
+    return {"status": "ok"}
+
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 

@@ -25,13 +25,14 @@ RUN pip install --upgrade pip \
 COPY app ./app
 COPY templates ./templates
 COPY static ./static
+COPY docker-entrypoint.sh /docker-entrypoint.sh
 
 RUN mkdir -p data uploads \
-    && chown -R hatchway:hatchway /app
-
-USER hatchway
+    && chown -R hatchway:hatchway /app \
+    && chmod +x /docker-entrypoint.sh
 
 EXPOSE 8000
 
-# Слушаем все интерфейсы — для Docker / reverse proxy
+# Запуск от root только для chown томов; процесс uvicorn — пользователь hatchway
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
