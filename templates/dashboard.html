@@ -2,7 +2,7 @@
 {% block title %}Кабинет — Hatchway{% endblock %}
 {% block content %}
 <h1>Загрузка колодца</h1>
-<p class="lead">За один раз — <strong>два</strong> файла: фото люка и панорама места с ориентиром (здание рядом). В обоих снимках должны быть геоданные GPS в EXIF. На одной карте показываются точки из EXIF и <strong>ваше местоположение</strong> по браузеру (запрос при открытии страницы).</p>
+<p class="lead">За один раз — <strong>два</strong> файла: фото люка и панорама места с ориентиром (здание рядом). Координаты: <strong>GPS в EXIF</strong> или, если их нет, <strong>точка с карты</strong> после разрешения геолокации в браузере (жёлтая метка). На карте показываются точки снимков и ваше местоположение.</p>
 
 <section class="card upload-section">
   <h2>Новая пара фото</h2>
@@ -25,7 +25,7 @@
     </div>
 
     <p class="error" id="client-error" hidden role="alert"></p>
-    <p class="small muted" id="submit-hint">Кнопка станет активной, когда в <strong>обоих</strong> выбранных файлах будет распознан GPS в EXIF (под полями появятся зелёные подсказки и точки на карте).</p>
+    <p class="small muted" id="submit-hint">Кнопка станет активной, когда для <strong>обоих</strong> файлов есть координаты: из EXIF или с карты (нужна геолокация браузера).</p>
     <div class="submit-row">
       <button type="submit" class="btn primary" id="submit-btn" disabled>Отправить на сервер</button>
     </div>

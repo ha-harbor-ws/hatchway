@@ -16,10 +16,17 @@
 
   let hatchOk = false;
   let panOk = false;
+  let hatchFromMap = false;
+  let panFromMap = false;
   let hatchLoadGen = 0;
   let panLoadGen = 0;
   /** Последняя геопозиция с карты (браузер) — уходит на сервер при отправке формы */
   let lastUserMap = null;
+
+  async function recheckGpsAfterGeo() {
+    await onHatchChange();
+    await onPanChange();
+  }
 
   function _fileKey(file) {
     return file ? file.name + "|" + file.size + "|" + file.lastModified : "";
@@ -96,6 +103,7 @@
     if (!navigator.geolocation) {
       lastUserMap = null;
       geoStatus.textContent = "Геолокация в этом браузере недоступна.";
+      void recheckGpsAfterGeo();
       return;
     }
     geoStatus.textContent = "Запрос местоположения у браузера…";
@@ -131,15 +139,17 @@
         geoStatus.textContent = "Местоположение на карте (жёлтая точка).";
         fitMapToAll();
         invalidateMap();
+        void recheckGpsAfterGeo();
       },
       function (err) {
         lastUserMap = null;
         const codes = {
-          1: "Геолокация отклонена — карта только по EXIF фото.",
+          1: "Геолокация отклонена — без неё нельзя подставить координаты, если в EXIF нет GPS.",
           2: "Не удалось определить местоположение.",
           3: "Превышено время ожидания геолокации.",
         };
         geoStatus.textContent = codes[err.code] || "Геолокация недоступна.";
+        void recheckGpsAfterGeo();
       },
       { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 }
     );
@@ -246,11 +256,11 @@
     clientError.hidden = true;
     if (submitHint) {
       if (hatchOk && panOk) {
-        submitHint.textContent = "Оба снимка с GPS — можно отправить на сервер.";
+        submitHint.textContent = "Оба снимка с координатами (EXIF и/или карта) — можно отправить на сервер.";
         submitHint.className = "small hint ok";
       } else {
         submitHint.textContent =
-          "Кнопка включится, когда в обоих файлах будет распознан GPS в EXIF (зелёные подсказки и точки на карте). Снимки с телефона обычно подходят, если при съёмке была включена геолокация.";
+          "Нужны координаты для обоих файлов: GPS в EXIF или точка с карты после разрешения геолокации. Подсказки под полями и маркеры на карте покажут готовность.";
         submitHint.className = "small muted";
       }
     }
@@ -259,11 +269,12 @@
   async function onHatchChange() {
     const gen = ++hatchLoadGen;
     hatchOk = false;
+    hatchFromMap = false;
     removeHatchMarker();
     updateSubmit();
     const f = hatchInput.files && hatchInput.files[0];
     if (!f) {
-      hatchHint.textContent = "Выберите файл — проверим GPS в EXIF.";
+      hatchHint.textContent = "Выберите файл — проверим GPS в EXIF или подставим точку с карты.";
       hatchHint.classList.remove("ok", "bad");
       fitMapToAll();
       updateSubmit();
@@ -273,21 +284,37 @@
     const pos = await readGps(f);
     if (gen !== hatchLoadGen) return;
     if (_fileKey(hatchInput.files && hatchInput.files[0]) !== key) return;
-    if (!pos) {
+    let useLat;
+    let useLon;
+    let fromMap = false;
+    if (pos) {
+      useLat = pos.lat;
+      useLon = pos.lon;
+      fromMap = false;
+    } else if (lastUserMap && Number.isFinite(lastUserMap.lat) && Number.isFinite(lastUserMap.lon)) {
+      useLat = lastUserMap.lat;
+      useLon = lastUserMap.lon;
+      fromMap = true;
+    } else {
       setHint(
         hatchHint,
         false,
         "",
-        "В этом файле не найдены GPS-координаты в EXIF. Снимок с телефона с включённой геолокацией обычно подходит."
+        "В EXIF нет GPS. Разрешите геолокацию (жёлтая точка на карте) или выберите фото с геометкой."
       );
       fitMapToAll();
       updateSubmit();
       return;
     }
     hatchOk = true;
-    setHint(hatchHint, true, "GPS в EXIF найден — точка на карте (синяя).", "");
+    hatchFromMap = fromMap;
+    if (fromMap) {
+      setHint(hatchHint, true, "В EXIF нет GPS — для люка используем координаты с карты (браузер), синяя точка.", "");
+    } else {
+      setHint(hatchHint, true, "GPS в EXIF найден — точка на карте (синяя).", "");
+    }
     try {
-      hatchMarker = L.circleMarker([pos.lat, pos.lon], {
+      hatchMarker = L.circleMarker([useLat, useLon], {
         radius: 10,
         color: "#2a7abf",
         weight: 2,
@@ -295,7 +322,7 @@
         fillOpacity: 0.95,
       })
         .addTo(map)
-        .bindPopup("Люк: координаты из EXIF этого фото");
+        .bindPopup(fromMap ? "Люк: координаты с карты (EXIF без GPS)" : "Люк: координаты из EXIF этого фото");
       fitMapToAll();
       invalidateMap();
     } catch (e) {
@@ -308,11 +335,12 @@
   async function onPanChange() {
     const gen = ++panLoadGen;
     panOk = false;
+    panFromMap = false;
     removePanMarker();
     updateSubmit();
     const f = panInput.files && panInput.files[0];
     if (!f) {
-      panHint.textContent = "Выберите файл — проверим GPS в EXIF.";
+      panHint.textContent = "Выберите файл — проверим GPS в EXIF или подставим точку с карты.";
       panHint.classList.remove("ok", "bad");
       fitMapToAll();
       updateSubmit();
@@ -322,16 +350,37 @@
     const pos = await readGps(f);
     if (gen !== panLoadGen) return;
     if (_fileKey(panInput.files && panInput.files[0]) !== key) return;
-    if (!pos) {
-      setHint(panHint, false, "", "В этом файле не найдены GPS-координаты в EXIF.");
+    let useLat;
+    let useLon;
+    let fromMap = false;
+    if (pos) {
+      useLat = pos.lat;
+      useLon = pos.lon;
+      fromMap = false;
+    } else if (lastUserMap && Number.isFinite(lastUserMap.lat) && Number.isFinite(lastUserMap.lon)) {
+      useLat = lastUserMap.lat;
+      useLon = lastUserMap.lon;
+      fromMap = true;
+    } else {
+      setHint(
+        panHint,
+        false,
+        "",
+        "В EXIF нет GPS. Разрешите геолокацию (жёлтая точка) или выберите фото с геометкой."
+      );
       fitMapToAll();
       updateSubmit();
       return;
     }
     panOk = true;
-    setHint(panHint, true, "GPS в EXIF найден — точка на карте (зелёная).", "");
+    panFromMap = fromMap;
+    if (fromMap) {
+      setHint(panHint, true, "В EXIF нет GPS — для панорамы используем координаты с карты (браузер), зелёная точка.", "");
+    } else {
+      setHint(panHint, true, "GPS в EXIF найден — точка на карте (зелёная).", "");
+    }
     try {
-      panMarker = L.circleMarker([pos.lat, pos.lon], {
+      panMarker = L.circleMarker([useLat, useLon], {
         radius: 10,
         color: "#2d8a4e",
         weight: 2,
@@ -339,7 +388,7 @@
         fillOpacity: 0.95,
       })
         .addTo(map)
-        .bindPopup("Панорама: координаты из EXIF этого фото");
+        .bindPopup(fromMap ? "Панорама: координаты с карты (EXIF без GPS)" : "Панорама: координаты из EXIF этого фото");
       fitMapToAll();
       invalidateMap();
     } catch (e) {
@@ -359,7 +408,7 @@
 
   if (typeof globalThis.exifr === "undefined" && submitHint) {
     submitHint.textContent =
-      "Не загрузилась библиотека EXIF (cdn.jsdelivr.net). Проверьте сеть, VPN или блокировщик — без неё GPS в файлах не проверить и кнопка не активируется.";
+      "Библиотека EXIF не загрузилась — в файлах не проверить GPS. Координаты можно подставить с карты после разрешения геолокации (если она доступна).";
     submitHint.className = "small hint bad";
   } else {
     updateSubmit();
@@ -369,7 +418,7 @@
     e.preventDefault();
     clientError.hidden = true;
     if (!hatchOk || !panOk) {
-      clientError.textContent = "Сначала выберите два снимка с GPS в EXIF.";
+      clientError.textContent = "Сначала выберите оба файла и дождитесь координат (EXIF или карта).";
       clientError.hidden = false;
       return;
     }
@@ -382,6 +431,12 @@
       if (typeof lastUserMap.acc === "number" && isFinite(lastUserMap.acc)) {
         fd.append("user_map_accuracy_m", String(lastUserMap.acc));
       }
+    }
+    if (hatchFromMap) {
+      fd.append("hatch_from_map", "1");
+    }
+    if (panFromMap) {
+      fd.append("panorama_from_map", "1");
     }
     if (submitBtn) submitBtn.disabled = true;
     try {
@@ -403,8 +458,10 @@
         form.reset();
         hatchOk = false;
         panOk = false;
-        hatchHint.textContent = "Выберите файл — проверим GPS в EXIF.";
-        panHint.textContent = "Выберите файл — проверим GPS в EXIF.";
+        hatchFromMap = false;
+        panFromMap = false;
+        hatchHint.textContent = "Выберите файл — проверим GPS в EXIF или подставим точку с карты.";
+        panHint.textContent = "Выберите файл — проверим GPS в EXIF или подставим точку с карты.";
         hatchHint.classList.remove("ok", "bad");
         panHint.classList.remove("ok", "bad");
         removeHatchMarker();

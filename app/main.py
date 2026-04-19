@@ -85,6 +85,12 @@ def require_user(request: Request, db: Session) -> User:
 MAX_BYTES = MAX_UPLOAD_MB * 1024 * 1024
 
 
+def _truthy_form_flag(v: str | None) -> bool:
+    if v is None:
+        return False
+    return str(v).strip().lower() in ("1", "true", "yes", "on")
+
+
 def _parse_optional_user_map_geo(
     user_map_lat: str | None,
     user_map_lon: str | None,
@@ -289,6 +295,8 @@ async def upload_well(
     user_map_lat: str | None = Form(default=None),
     user_map_lon: str | None = Form(default=None),
     user_map_accuracy_m: str | None = Form(default=None),
+    hatch_from_map: str | None = Form(default=None),
+    panorama_from_map: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ) -> HTMLResponse:
     user = require_user(request, db)
@@ -296,16 +304,32 @@ async def upload_well(
     hatch_data, hatch_ext = await _read_upload(hatch)
     pan_data, pan_ext = await _read_upload(panorama)
 
-    ok_h, lat_h, lon_h = get_gps_coords(hatch_data)
-    ok_p, lat_p, lon_p = get_gps_coords(pan_data)
-    if not ok_h:
-        raise HTTPException(status_code=400, detail="В фото люка нет геоданных EXIF (GPS)")
-    if not ok_p or lat_p is None or lon_p is None:
-        raise HTTPException(status_code=400, detail="В панорамном фото нет геоданных EXIF (GPS)")
-
     u_lat, u_lon, u_acc = _parse_optional_user_map_geo(
         user_map_lat, user_map_lon, user_map_accuracy_m
     )
+
+    ok_h, lat_h, lon_h = get_gps_coords(hatch_data)
+    ok_p, lat_p, lon_p = get_gps_coords(pan_data)
+
+    if not ok_h or lat_h is None or lon_h is None:
+        if _truthy_form_flag(hatch_from_map) and u_lat is not None and u_lon is not None:
+            lat_h, lon_h = float(u_lat), float(u_lon)
+            ok_h = True
+    if not ok_p or lat_p is None or lon_p is None:
+        if _truthy_form_flag(panorama_from_map) and u_lat is not None and u_lon is not None:
+            lat_p, lon_p = float(u_lat), float(u_lon)
+            ok_p = True
+
+    if not ok_h or lat_h is None or lon_h is None:
+        raise HTTPException(
+            status_code=400,
+            detail="В фото люка нет GPS в EXIF. Разрешите геолокацию в браузере или выберите фото с геометкой.",
+        )
+    if not ok_p or lat_p is None or lon_p is None:
+        raise HTTPException(
+            status_code=400,
+            detail="В панораме нет GPS в EXIF. Разрешите геолокацию в браузере или выберите фото с геометкой.",
+        )
 
     uid_folder = UPLOADS_DIR / str(user.id)
     uid_folder.mkdir(parents=True, exist_ok=True)
