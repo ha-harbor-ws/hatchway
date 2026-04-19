@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 import uuid
 from pathlib import Path
@@ -16,6 +17,23 @@ from app.config import ALLOWED_EXTENSIONS, MAX_UPLOAD_MB, SECRET_KEY, UPLOADS_DI
 from app.database import get_db, init_db
 from app.exif_utils import get_gps_coords
 from app.models import User, WellSubmission
+
+
+def _suppress_uvicorn_invalid_http_noise() -> None:
+    """
+    Uvicorn пишет WARNING «Invalid HTTP request received» при TLS на HTTP-порту
+    (например https://…:8000) или при мусоре от сканеров. Приложение не падает —
+    это шум; отфильтровываем только эту строку, остальные WARNING остаются.
+    """
+
+    class _DropInvalidHttp(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            return "Invalid HTTP request received" not in record.getMessage()
+
+    logging.getLogger("uvicorn").addFilter(_DropInvalidHttp())
+
+
+_suppress_uvicorn_invalid_http_noise()
 
 app = FastAPI(title="Hatchway")
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, session_cookie="hatchway_session")
@@ -65,6 +83,38 @@ def require_user(request: Request, db: Session) -> User:
 
 
 MAX_BYTES = MAX_UPLOAD_MB * 1024 * 1024
+
+
+def _parse_optional_user_map_geo(
+    user_map_lat: str | None,
+    user_map_lon: str | None,
+    user_map_accuracy_m: str | None,
+) -> tuple[float | None, float | None, float | None]:
+    """Координаты с карты (браузер); при некорректных данных — все None."""
+    if user_map_lat is None or user_map_lon is None:
+        return None, None, None
+    lat_s = (user_map_lat or "").strip()
+    lon_s = (user_map_lon or "").strip()
+    if not lat_s or not lon_s:
+        return None, None, None
+    try:
+        lat = float(lat_s)
+        lon = float(lon_s)
+    except ValueError:
+        return None, None, None
+    if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+        return None, None, None
+    acc_out: float | None = None
+    if user_map_accuracy_m is not None:
+        acc_s = (user_map_accuracy_m or "").strip()
+        if acc_s:
+            try:
+                acc = float(acc_s)
+                if 0.0 <= acc <= 1_000_000.0:
+                    acc_out = acc
+            except ValueError:
+                pass
+    return lat, lon, acc_out
 
 
 async def _read_upload(upload: UploadFile) -> tuple[bytes, str]:
@@ -205,6 +255,9 @@ async def upload_well(
     request: Request,
     hatch: UploadFile = File(...),
     panorama: UploadFile = File(...),
+    user_map_lat: str | None = Form(default=None),
+    user_map_lon: str | None = Form(default=None),
+    user_map_accuracy_m: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ) -> HTMLResponse:
     user = require_user(request, db)
@@ -213,11 +266,15 @@ async def upload_well(
     pan_data, pan_ext = await _read_upload(panorama)
 
     ok_h, lat_h, lon_h = get_gps_coords(hatch_data)
-    ok_p, _, _ = get_gps_coords(pan_data)
+    ok_p, lat_p, lon_p = get_gps_coords(pan_data)
     if not ok_h:
         raise HTTPException(status_code=400, detail="В фото люка нет геоданных EXIF (GPS)")
-    if not ok_p:
+    if not ok_p or lat_p is None or lon_p is None:
         raise HTTPException(status_code=400, detail="В панорамном фото нет геоданных EXIF (GPS)")
+
+    u_lat, u_lon, u_acc = _parse_optional_user_map_geo(
+        user_map_lat, user_map_lon, user_map_accuracy_m
+    )
 
     uid_folder = UPLOADS_DIR / str(user.id)
     uid_folder.mkdir(parents=True, exist_ok=True)
@@ -241,6 +298,11 @@ async def upload_well(
         panorama_rel_path=rel_p,
         hatch_lat=float(lat_h),
         hatch_lon=float(lon_h),
+        panorama_lat=float(lat_p),
+        panorama_lon=float(lon_p),
+        user_map_lat=u_lat,
+        user_map_lon=u_lon,
+        user_map_accuracy_m=u_acc,
     )
     db.add(sub)
     db.commit()

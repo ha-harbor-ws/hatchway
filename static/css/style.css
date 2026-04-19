@@ -204,4 +204,23 @@ table.rating .num { font-variant-numeric: tabular-nums; font-weight: 600; }
   background: #121820;
 }
 
+.map-large {
+  height: min(52vh, 440px);
+  min-height: 280px;
+}
+
+.map-card {
+  margin: 1.25rem 0 1rem;
+}
+
+.geo-status {
+  margin: 0 0 0.5rem;
+  min-height: 1.25rem;
+}
+
+.map-legend {
+  margin: 0.5rem 0 0;
+  max-width: 48rem;
+}
+
 .upload-section h2 { margin-top: 0; }

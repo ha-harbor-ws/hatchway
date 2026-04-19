@@ -8,33 +8,136 @@
   const panHint = document.getElementById("pan-gps-hint");
   const submitBtn = document.getElementById("submit-btn");
   const clientError = document.getElementById("client-error");
+  const geoStatus = document.getElementById("geo-status");
+
+  const DEFAULT_CENTER = [55.75, 37.62];
+  const DEFAULT_ZOOM = 11;
 
   let hatchOk = false;
   let panOk = false;
+  /** Последняя геопозиция с карты (браузер) — уходит на сервер при отправке формы */
+  let lastUserMap = null;
 
-  const hatchMap = L.map("map-hatch", { zoomControl: true }).setView([55.75, 37.62], 12);
-  const panMap = L.map("map-panorama", { zoomControl: true }).setView([55.75, 37.62], 12);
+  const map = L.map("map-well", { zoomControl: true }).setView(DEFAULT_CENTER, DEFAULT_ZOOM);
 
-  const tiles = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-  });
-  tiles.addTo(hatchMap);
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-  }).addTo(panMap);
+  }).addTo(map);
 
   let hatchMarker = null;
   let panMarker = null;
+  let userMarker = null;
+  let userAccuracyCircle = null;
 
-  function invalidateMaps() {
+  function removeHatchMarker() {
+    if (hatchMarker) {
+      map.removeLayer(hatchMarker);
+      hatchMarker = null;
+    }
+  }
+
+  function removePanMarker() {
+    if (panMarker) {
+      map.removeLayer(panMarker);
+      panMarker = null;
+    }
+  }
+
+  function removeUserGeo() {
+    if (userMarker) {
+      map.removeLayer(userMarker);
+      userMarker = null;
+    }
+    if (userAccuracyCircle) {
+      map.removeLayer(userAccuracyCircle);
+      userAccuracyCircle = null;
+    }
+  }
+
+  function fitMapToAll() {
+    const layers = [];
+    if (hatchMarker) layers.push(hatchMarker);
+    if (panMarker) layers.push(panMarker);
+    if (userMarker) layers.push(userMarker);
+    if (userAccuracyCircle) layers.push(userAccuracyCircle);
+
+    if (layers.length === 0) {
+      map.setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+      return;
+    }
+
+    const b = L.featureGroup(layers).getBounds();
+    if (b.isValid()) {
+      map.fitBounds(b, { padding: [56, 56], maxZoom: 17 });
+    }
+  }
+
+  function invalidateMap() {
     setTimeout(function () {
-      hatchMap.invalidateSize();
-      panMap.invalidateSize();
+      map.invalidateSize();
     }, 200);
   }
-  window.addEventListener("load", invalidateMaps);
+
+  function requestBrowserGeo() {
+    if (!geoStatus) return;
+    geoStatus.textContent = "";
+    if (!navigator.geolocation) {
+      lastUserMap = null;
+      geoStatus.textContent = "Геолокация в этом браузере недоступна.";
+      return;
+    }
+    geoStatus.textContent = "Запрос местоположения у браузера…";
+    navigator.geolocation.getCurrentPosition(
+      function (pos) {
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        const acc = pos.coords.accuracy;
+
+        removeUserGeo();
+
+        userAccuracyCircle = L.circle([lat, lon], {
+          radius: Math.max(acc, 25),
+          color: "#c9a227",
+          weight: 1,
+          fillColor: "#f5d76e",
+          fillOpacity: 0.2,
+        }).addTo(map);
+
+        userMarker = L.circleMarker([lat, lon], {
+          radius: 8,
+          color: "#c9a227",
+          weight: 2,
+          fillColor: "#f5d76e",
+          fillOpacity: 1,
+        })
+          .addTo(map)
+          .bindPopup(
+            "Ваше местоположение по данным браузера<br>точность ≈ " + Math.round(acc) + " м"
+          );
+
+        lastUserMap = { lat: lat, lon: lon, acc: acc };
+        geoStatus.textContent = "Местоположение на карте (жёлтая точка).";
+        fitMapToAll();
+        invalidateMap();
+      },
+      function (err) {
+        lastUserMap = null;
+        const codes = {
+          1: "Геолокация отклонена — карта только по EXIF фото.",
+          2: "Не удалось определить местоположение.",
+          3: "Превышено время ожидания геолокации.",
+        };
+        geoStatus.textContent = codes[err.code] || "Геолокация недоступна.";
+      },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 }
+    );
+  }
+
+  window.addEventListener("load", function () {
+    invalidateMap();
+    setTimeout(requestBrowserGeo, 400);
+  });
 
   async function readGps(file) {
     if (!file || !window.exifr) return null;
@@ -55,16 +158,19 @@
     el.classList.add(ok ? "ok" : "bad");
   }
 
+  function updateSubmit() {
+    submitBtn.disabled = !(hatchOk && panOk);
+    clientError.hidden = true;
+  }
+
   async function onHatchChange() {
     hatchOk = false;
+    removeHatchMarker();
     const f = hatchInput.files && hatchInput.files[0];
     if (!f) {
-      hatchHint.textContent = "Выберите файл — проверим GPS в браузере.";
+      hatchHint.textContent = "Выберите файл — проверим GPS в EXIF.";
       hatchHint.classList.remove("ok", "bad");
-      if (hatchMarker) {
-        hatchMap.removeLayer(hatchMarker);
-        hatchMarker = null;
-      }
+      fitMapToAll();
       updateSubmit();
       return;
     }
@@ -76,62 +182,58 @@
         "",
         "В этом файле не найдены GPS-координаты в EXIF. Снимок с телефона с включённой геолокацией обычно подходит."
       );
-      if (hatchMarker) {
-        hatchMap.removeLayer(hatchMarker);
-        hatchMarker = null;
-      }
+      fitMapToAll();
       updateSubmit();
       return;
     }
     hatchOk = true;
-    setHint(hatchHint, true, "GPS в EXIF найден.", "");
-    hatchMap.setView([pos.lat, pos.lon], 17);
-    if (hatchMarker) hatchMap.removeLayer(hatchMarker);
-    hatchMarker = L.marker([pos.lat, pos.lon]).addTo(hatchMap);
-    invalidateMaps();
+    setHint(hatchHint, true, "GPS в EXIF найден — точка на карте (синяя).", "");
+    hatchMarker = L.circleMarker([pos.lat, pos.lon], {
+      radius: 10,
+      color: "#2a7abf",
+      weight: 2,
+      fillColor: "#3d9cf5",
+      fillOpacity: 0.95,
+    })
+      .addTo(map)
+      .bindPopup("Люк: координаты из EXIF этого фото");
+    fitMapToAll();
+    invalidateMap();
     updateSubmit();
   }
 
   async function onPanChange() {
     panOk = false;
+    removePanMarker();
     const f = panInput.files && panInput.files[0];
     if (!f) {
-      panHint.textContent = "Выберите файл — проверим GPS в браузере.";
+      panHint.textContent = "Выберите файл — проверим GPS в EXIF.";
       panHint.classList.remove("ok", "bad");
-      if (panMarker) {
-        panMap.removeLayer(panMarker);
-        panMarker = null;
-      }
+      fitMapToAll();
       updateSubmit();
       return;
     }
     const pos = await readGps(f);
     if (!pos) {
-      setHint(
-        panHint,
-        false,
-        "",
-        "В этом файле не найдены GPS-координаты в EXIF."
-      );
-      if (panMarker) {
-        panMap.removeLayer(panMarker);
-        panMarker = null;
-      }
+      setHint(panHint, false, "", "В этом файле не найдены GPS-координаты в EXIF.");
+      fitMapToAll();
       updateSubmit();
       return;
     }
     panOk = true;
-    setHint(panHint, true, "GPS в EXIF найден.", "");
-    panMap.setView([pos.lat, pos.lon], 16);
-    if (panMarker) panMap.removeLayer(panMarker);
-    panMarker = L.marker([pos.lat, pos.lon]).addTo(panMap);
-    invalidateMaps();
+    setHint(panHint, true, "GPS в EXIF найден — точка на карте (зелёная).", "");
+    panMarker = L.circleMarker([pos.lat, pos.lon], {
+      radius: 10,
+      color: "#2d8a4e",
+      weight: 2,
+      fillColor: "#4ecf7a",
+      fillOpacity: 0.95,
+    })
+      .addTo(map)
+      .bindPopup("Панорама: координаты из EXIF этого фото");
+    fitMapToAll();
+    invalidateMap();
     updateSubmit();
-  }
-
-  function updateSubmit() {
-    submitBtn.disabled = !(hatchOk && panOk);
-    clientError.hidden = true;
   }
 
   hatchInput.addEventListener("change", onHatchChange);
@@ -148,6 +250,13 @@
     const fd = new FormData();
     fd.append("hatch", hatchInput.files[0]);
     fd.append("panorama", panInput.files[0]);
+    if (lastUserMap != null) {
+      fd.append("user_map_lat", String(lastUserMap.lat));
+      fd.append("user_map_lon", String(lastUserMap.lon));
+      if (typeof lastUserMap.acc === "number" && isFinite(lastUserMap.acc)) {
+        fd.append("user_map_accuracy_m", String(lastUserMap.acc));
+      }
+    }
     submitBtn.disabled = true;
     try {
       const res = await fetch("/api/well", {
@@ -168,23 +277,20 @@
         form.reset();
         hatchOk = false;
         panOk = false;
-        hatchHint.textContent = "Выберите файл — проверим GPS в браузере.";
-        panHint.textContent = "Выберите файл — проверим GPS в браузере.";
+        hatchHint.textContent = "Выберите файл — проверим GPS в EXIF.";
+        panHint.textContent = "Выберите файл — проверим GPS в EXIF.";
         hatchHint.classList.remove("ok", "bad");
         panHint.classList.remove("ok", "bad");
-        if (hatchMarker) {
-          hatchMap.removeLayer(hatchMarker);
-          hatchMarker = null;
-        }
-        if (panMarker) {
-          panMap.removeLayer(panMarker);
-          panMarker = null;
-        }
-        hatchMap.setView([55.75, 37.62], 12);
-        panMap.setView([55.75, 37.62], 12);
+        removeHatchMarker();
+        removePanMarker();
+        removeUserGeo();
+        lastUserMap = null;
+        if (geoStatus) geoStatus.textContent = "";
+        map.setView(DEFAULT_CENTER, DEFAULT_ZOOM);
         if (nextBlock) {
           nextBlock.scrollIntoView({ behavior: "smooth", block: "start" });
         }
+        setTimeout(requestBrowserGeo, 400);
       } else {
         let msg = "Не удалось сохранить.";
         try {

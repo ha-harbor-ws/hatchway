@@ -2,7 +2,7 @@
 {% block title %}Кабинет — Hatchway{% endblock %}
 {% block content %}
 <h1>Загрузка колодца</h1>
-<p class="lead">За один раз — <strong>два</strong> файла: фото люка и панорама места с ориентиром (здание рядом). В обоих снимках должны быть геоданные GPS в EXIF.</p>
+<p class="lead">За один раз — <strong>два</strong> файла: фото люка и панорама места с ориентиром (здание рядом). В обоих снимках должны быть геоданные GPS в EXIF. На одной карте показываются точки из EXIF и <strong>ваше местоположение</strong> по браузеру (запрос при открытии страницы).</p>
 
 {% include "partials/rating_table.html" %}
 
@@ -15,18 +15,23 @@
           Фото люка колодца
           <input type="file" id="hatch-input" name="hatch" accept="image/jpeg,image/png,image/webp" required>
         </label>
-        <p class="hint" id="hatch-gps-hint">Выберите файл — проверим GPS в браузере.</p>
-        <div id="map-hatch" class="map"></div>
+        <p class="hint" id="hatch-gps-hint">Выберите файл — проверим GPS в EXIF.</p>
       </div>
       <div>
         <label class="file-label">
           Панорама расположения (с зданием рядом)
           <input type="file" id="panorama-input" name="panorama" accept="image/jpeg,image/png,image/webp" required>
         </label>
-        <p class="hint" id="pan-gps-hint">Выберите файл — проверим GPS в браузере.</p>
-        <div id="map-panorama" class="map"></div>
+        <p class="hint" id="pan-gps-hint">Выберите файл — проверим GPS в EXIF.</p>
       </div>
     </div>
+
+    <div class="map-card">
+      <p class="geo-status muted small" id="geo-status" aria-live="polite"></p>
+      <div id="map-well" class="map map-large" role="application" aria-label="Карта точек съёмки"></div>
+      <p class="map-legend small muted">Синяя точка — координаты из EXIF фото люка; зелёная — из EXIF панорамы. Жёлтая — ваше приблизительное местоположение по данным браузера (запрос появится при загрузке страницы).</p>
+    </div>
+
     <p class="error" id="client-error" hidden role="alert"></p>
     <button type="submit" class="btn primary" id="submit-btn" disabled>Отправить на сервер</button>
   </form>
